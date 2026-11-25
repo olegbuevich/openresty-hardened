@@ -1,5 +1,5 @@
-# Builds, tests and scans both variants on every push and pull request. Pushes to master
-# publish the `edge` tags; a tag vX.Y.Z.W-N publishes X.Y.Z.W-N, X.Y.Z.W and latest
+# Builds, tests and scans both variants on pushes to master and pull requests. Only a
+# release tag vX.Y.Z.W-N publishes: X.Y.Z.W-N, X.Y.Z.W and latest
 # (variant geoip2: the same tags with the -geoip2 suffix). Published images are multi-arch
 # (amd64, arm64), carry an SBOM and provenance attestation and are signed with cosign
 # (keyless, GitHub OIDC).
@@ -8,7 +8,8 @@ name: build
 on:
   push:
     branches: [master]
-    tags: ["v*"]
+    # only release tags vX.Y.Z.W-N (OpenResty version - image revision); others do not build
+    tags: ["v[0-9]+.[0-9]+.[0-9]+.[0-9]+-[0-9]+"]
   pull_request:
   workflow_dispatch:
 
@@ -19,7 +20,29 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # A release tag must name the OpenResty version of the Dockerfile; otherwise nothing is
+  # built or published.
+  tag:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag matches the OpenResty version
+        run: |
+          version=$(sed -n 's|^FROM openresty/openresty:\([0-9.]*\)-alpine@.*|\1|p' Dockerfile)
+          if ! echo "$GITHUB_REF_NAME" | grep -Eq "^v${version//./\\.}-[0-9]+\$"; then
+            echo "::error::tag $GITHUB_REF_NAME does not match OpenResty $version (want v$version-N)"
+            exit 1
+          fi
+
   image:
+    needs: tag
+    # the tag job is skipped for branches and pull requests
+    if: ${{ !cancelled() && (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -34,20 +57,11 @@ jobs:
           - variant: geoip2
             suffix: -geoip2
     env:
-      PUBLISH: ${{ github.event_name == 'push' }}
+      PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Tag matches the OpenResty version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(sed -n 's|^FROM openresty/openresty:\([0-9.]*\)-alpine@.*|\1|p' Dockerfile)
-          case "$GITHUB_REF_NAME" in
-            "v$version"-[0-9]*) ;;
-            *) echo "tag $GITHUB_REF_NAME does not match OpenResty $version (want v$version-N)"; exit 1 ;;
-          esac
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -76,6 +90,9 @@ jobs:
 
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          # also on the multi-arch index: GHCR shows the description of the index
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/${{ github.repository }}
           flavor: |
@@ -85,7 +102,6 @@ jobs:
             type=match,pattern=^v(.*)$,group=1
             type=match,pattern=^v(\d+\.\d+\.\d+\.\d+)-\d+$,group=1
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=edge,branch=master
           labels: |
             org.opencontainers.image.title=openresty-hardened${{ matrix.suffix }}
             org.opencontainers.image.description=OpenResty on distroless: non-root, read-only root filesystem, no shell${{ matrix.variant == 'geoip2' && ', with ngx_http_geoip2_module' || '' }}

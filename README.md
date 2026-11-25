@@ -27,7 +27,6 @@ patched.
 | `1.31.9.1-1` | OpenResty 1.31.9.1, image revision 1 (immutable) |
 | `1.31.9.1` | latest image revision of OpenResty 1.31.9.1 |
 | `latest` | latest release |
-| `edge` | the master branch |
 
 Pin by digest in production: `ghcr.io/olegbuevich/openresty-hardened:1.31.9.1-1@sha256:...`.
 
@@ -104,6 +103,8 @@ geoip2 /etc/geoip/GeoLite2-Country.mmdb {
 
 ## Verification
 
+Signatures use the Sigstore bundle format: verify with cosign v3 or newer.
+
 ```sh
 cosign verify ghcr.io/olegbuevich/openresty-hardened:latest \
   --certificate-identity-regexp '^https://github.com/olegbuevich/openresty-hardened/' \
@@ -129,7 +130,9 @@ root filesystem and no capabilities, Lua + cjson + PCRE2 JIT, TLS, GeoIP2 lookup
 
 Releasing: Dependabot updates the base image digests and the actions. For a new OpenResty
 version, also update `OPENRESTY_SHA256` in the [Dockerfile](Dockerfile), then tag
-`v<openresty version>-<revision>` (e.g. `v1.31.9.1-1`); CI checks that the tag matches.
+`v<openresty version>-<revision>` (e.g. `v1.31.9.1-1`). Other tags do not trigger a build,
+and a release tag whose version differs from the OpenResty version in the Dockerfile
+fails before anything is built.
 
 ## License
 
