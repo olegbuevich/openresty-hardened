@@ -27,7 +27,7 @@ patched.
 | `1.31.9.1-1` | OpenResty 1.31.9.1, image revision 1 (immutable) |
 | `1.31.9.1` | latest image revision of OpenResty 1.31.9.1 |
 | `latest` | latest release |
-| `edge` | the main branch |
+| `edge` | the master branch |
 
 Pin by digest in production: `ghcr.io/olegbuevich/openresty-hardened:1.31.9.1-1@sha256:...`.
 

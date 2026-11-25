@@ -1,4 +1,4 @@
-# Builds, tests and scans both variants on every push and pull request. Pushes to main
+# Builds, tests and scans both variants on every push and pull request. Pushes to master
 # publish the `edge` tags; a tag vX.Y.Z.W-N publishes X.Y.Z.W-N, X.Y.Z.W and latest
 # (variant geoip2: the same tags with the -geoip2 suffix). Published images are multi-arch
 # (amd64, arm64), carry an SBOM and provenance attestation and are signed with cosign
@@ -7,7 +7,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -85,7 +85,7 @@ jobs:
             type=match,pattern=^v(.*)$,group=1
             type=match,pattern=^v(\d+\.\d+\.\d+\.\d+)-\d+$,group=1
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=edge,branch=main
+            type=edge,branch=master
           labels: |
             org.opencontainers.image.title=openresty-hardened${{ matrix.suffix }}
             org.opencontainers.image.description=OpenResty on distroless: non-root, read-only root filesystem, no shell${{ matrix.variant == 'geoip2' && ', with ngx_http_geoip2_module' || '' }}
