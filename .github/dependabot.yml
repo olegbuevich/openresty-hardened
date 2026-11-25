@@ -1,0 +1,12 @@
+# Base image digests and pinned actions. An OpenResty version bump also needs
+# OPENRESTY_SHA256 in the Dockerfile (the geoip2 build fails until it is updated).
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
