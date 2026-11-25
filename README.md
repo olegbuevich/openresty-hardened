@@ -28,6 +28,9 @@ patched.
 | `1.31.9.1` | latest image revision of OpenResty 1.31.9.1 |
 | `latest` | latest release |
 
+The images are also published to Docker Hub as `alehbuyevich/openresty-hardened`, only with
+the tags that never move (`1.31.9.1-1`, `1.31.9.1-1-geoip2`): tags there are immutable.
+
 Pin by digest in production: `ghcr.io/olegbuevich/openresty-hardened:1.31.9.1-1@sha256:...`.
 
 ## Usage

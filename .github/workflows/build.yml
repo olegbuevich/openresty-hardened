@@ -1,6 +1,7 @@
 # Builds, tests and scans both variants on pushes to master and pull requests. Only a
-# release tag vX.Y.Z.W-N publishes: X.Y.Z.W-N, X.Y.Z.W and latest
-# (variant geoip2: the same tags with the -geoip2 suffix). Published images are multi-arch
+# release tag vX.Y.Z.W-N publishes: to GHCR X.Y.Z.W-N, X.Y.Z.W and latest, to Docker Hub
+# only X.Y.Z.W-N, because tags there are immutable (variant geoip2: the same tags with
+# the -geoip2 suffix). Published images are multi-arch
 # (amd64, arm64), carry an SBOM and provenance attestation and are signed with cosign
 # (keyless, GitHub OIDC).
 name: build
@@ -57,6 +58,7 @@ jobs:
           - variant: geoip2
             suffix: -geoip2
     env:
+      DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/openresty-hardened
       PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,12 +112,29 @@ jobs:
             org.opencontainers.image.description=OpenResty on distroless: non-root, read-only root filesystem, no shell${{ matrix.variant == 'geoip2' && ', with ngx_http_geoip2_module' || '' }}
             org.opencontainers.image.licenses=BSD-2-Clause
 
+      # Docker Hub tags are immutable: only the tag that never moves
+      - id: meta-hub
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.DOCKERHUB_IMAGE }}
+          flavor: |
+            latest=false
+            suffix=${{ matrix.suffix }}
+          tags: |
+            type=match,pattern=^v(.*)$,group=1
+
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         if: env.PUBLISH == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: env.PUBLISH == 'true'
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - id: push
         name: Build and push (amd64, arm64)
@@ -126,7 +145,9 @@ jobs:
           target: ${{ matrix.variant }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.meta-hub.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           sbom: true
@@ -141,4 +162,6 @@ jobs:
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
           IMAGE: ghcr.io/${{ github.repository }}
-        run: cosign sign --yes "$IMAGE@$DIGEST"
+        run: |
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign sign --yes "$DOCKERHUB_IMAGE@$DIGEST"
